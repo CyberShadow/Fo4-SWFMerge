@@ -1,11 +1,16 @@
 import core.sys.windows.winuser;
 
+import std.algorithm.iteration;
 import std.array;
+import std.base64;
+import std.exception;
 import std.file;
 import std.path;
 import std.process;
+import std.range;
 import std.stdio;
 import std.string;
+import std.utf;
 
 import git.blob;
 import git.checkout;
@@ -21,6 +26,12 @@ import git.types;
 import ae.sys.file;
 import ae.sys.windows.misc;
 import ae.utils.array;
+import ae.utils.text;
+
+import abcfile;
+import asprogram;
+import assembler;
+import disassembler;
 
 import btdx;
 
@@ -51,18 +62,72 @@ void swix(string[] args)
 
 void unpackSWF(string swf, string dir)
 {
+	stderr.writeln(">> Unpacking ", swf);
 	dir.recreateEmptyDirectory();
 	auto xml = dir.buildPath("swix.xml");
 	swix(["swf2xml", swf, xml]);
 	enforce(xml.exists, "SwiX unpack failed");
+
+	auto lines = xml.readText().splitAsciiLines();
+	size_t tagEnd = 0;
+	int index = 0;
+	foreach_reverse (i, line; lines)
+	{
+		line = line.strip();
+		if (line == "</DoABCData>")
+			tagEnd = i;
+		else
+		if (line == "<DoABCData>")
+		{
+			enforce(tagEnd, "Incomplete SwiX file");
+			enforce(lines[i+1].strip() == "<![CDATA[" && lines[tagEnd-1].strip() == "]]>", "No CDATA wrapper");
+			auto b64data = lines[i+2..tagEnd-1].map!strip().join();
+			auto abcDir = "abc%d".format(index++);
+			lines = lines[0..i+1] ~ [`<ExternABC Dir="` ~ abcDir ~ `"/>`] ~ lines[tagEnd..$];
+			tagEnd = 0;
+
+			stderr.writeln(">>> Disassembling ", abcDir);
+			auto abcData = Base64.decode(b64data);
+			scope abc = ABCFile.read(abcData);
+			scope as = ASProgram.fromABC(abc);
+			scope disassembler = new Disassembler(as, buildPath(dir, abcDir), abcDir);
+			disassembler.dumpRaw = false;
+			disassembler.disassemble();
+		}
+	}
+	std.file.write(xml, lines.join("\r\n"));
 }
 
 void packSWF(string dir, string swf)
 {
-	dir.recreateEmptyDirectory();
+	stderr.writeln(">> Packing ", dir);
 	auto xml = dir.buildPath("swix.xml");
+
+	auto lines = xml.readText().splitAsciiLines();
+	size_t tagEnd = 0;
+	int index = 0;
+	foreach_reverse (i, line; lines)
+	{
+		if (line.startsWith(`<ExternABC Dir="`))
+		{
+			auto abcDir = line[16..$-3];
+			auto mainFile = buildPath(dir, abcDir, abcDir ~ ".main.asasm");
+
+			stderr.writeln(">>> Assembling ", abcDir);
+			auto as = new ASProgram;
+			auto assembler = new Assembler(as);
+			assembler.assemble(mainFile);
+			auto abc = as.toABC();
+			auto abcData = abc.write();
+			auto b64Data = Base64.encode(abcData).assumeUnique();
+
+			lines = lines[0..i] ~ ["<![CDATA[", b64Data , "]]>"] ~ lines[i+1..$];
+		}
+	}
+	std.file.write(xml, lines.join("\r\n"));
+
 	swix(["xml2swf", xml, swf]);
-	enforce(xml.exists, "SwiX pack failed");
+	enforce(swf.exists, "SwiX pack failed");
 }
 
 void mergeSWF(string base, string a, string b, string result)
@@ -71,20 +136,18 @@ void mergeSWF(string base, string a, string b, string result)
 	repoPath.recreateEmptyDirectory();
 	auto repo = initRepository(repoPath, OpenBare.no);
 
-	GitTree addSWF(string swf)
+	GitTree addSWF(string swf, string name)
 	{
-		auto dataPath = tempDir.buildPath("Repo-Data");
+		auto dataPath = tempDir.buildPath("Repo-Data-" ~ name);
 		unpackSWF(swf, dataPath);
 		return repo.addDir(dataPath);
 	}
 
-	auto baseTree = addSWF(base);
-	auto branch1  = addSWF(a);
-	auto branch2  = addSWF(b);
+	auto baseTree = addSWF(base, "Base");
+	auto branch1  = addSWF(a, "BranchA");
+	auto branch2  = addSWF(b, "BranchB");
 
-	enum workPath = tempDir.buildPath("Repo-Work");
-	workPath.recreateEmptyDirectory();
-	repo.setWorkPath(workPath);
+	stderr.writeln(">> Merging");
 
 	auto index = repo.mergeTrees(baseTree, branch1, branch2);
 	if (index.hasConflicts())
@@ -93,6 +156,10 @@ void mergeSWF(string base, string a, string b, string result)
 			throw new Exception("Conflict in " ~ ancestor.path);
 		assert(false, "Can't find conflict");
 	}
+
+	auto workPath = tempDir.buildPath("Repo-Work");
+	workPath.recreateEmptyDirectory();
+	repo.setWorkPath(workPath);
 
 	auto oid = index.writeTree(repo);
 	GitCheckoutOptions opts = { strategy : GitCheckoutStrategy.force };
@@ -137,29 +204,29 @@ void run(string[] args)
 	foreach (de; inputDataDir.dirEntries(SpanMode.breadth))
 	{
 		auto inputPath = de.name;
-		auto relPath = inputPath.relativePath(inputDataDir);
+		auto relPath = inputPath.absolutePath().relativePath(inputDataDir.absolutePath());
 		auto gamePath = buildPath("Data", relPath);
 		auto outPath = buildPath(outDir, relPath);
 
 		if (de.isDir)
 		{
-			stderr.writeln("Entering ", relPath);
+			stderr.writeln("> Entering ", relPath);
 			mkdir(outPath);
 		}
 		else
 		if (!gamePath.exists)
 		{
-			stderr.writeln("Copying ", relPath);
+			stderr.writeln("> Copying ", relPath);
 			copy(inputPath, outPath);
 		}
 		else
 		if (std.file.read(inputPath) == std.file.read(gamePath))
 		{
-			stderr.writeln("Already installed: ", relPath);
+			stderr.writeln("> Already installed: ", relPath);
 		}
 		else
 		{
-			stderr.writeln("Merging ", relPath);
+			stderr.writeln("> Merging ", relPath);
 			enforce(relPath.toLower.startsWith(`interface\`), "Non-Interface file conflict: " ~ relPath);
 			enforce(relPath.toLower.endsWith(".swf"), "Non-SWF file conflict: " ~ relPath);
 
@@ -177,27 +244,26 @@ void run(string[] args)
 	}
 
 	stderr.writeln("=== Installing ===");
-	debug { writeln("Press Enter to continue"); readln(); }
 
 	foreach (de; outDir.dirEntries(SpanMode.breadth))
 	{
 		auto outPath = de.name;
-		auto relPath = outPath.relativePath(inputDataDir);
+		auto relPath = outPath.absolutePath().relativePath(outDir.absolutePath());
 		auto gamePath = buildPath("Data", relPath);
 
 		if (de.isDir)
 		{
 			if (!gamePath.exists)
 			{
-				stderr.writeln("Creating ", relPath);
+				stderr.writeln("> Creating ", relPath);
 				mkdir(gamePath);
 			}
 		}
 		else
 		if (gamePath.exists)
 		{
-			stderr.writeln("Copying ", relPath);
-			copy(outPath, gamePath);
+			stderr.writeln("> Copying ", relPath);
+			debug{} else copy(outPath, gamePath);
 		}
 	}
 
