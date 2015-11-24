@@ -1,0 +1,9 @@
+[submodule "win32"]
+	path = win32
+	url = https://github.com/CS-svnmirror/dsource-bindings-win32
+[submodule "ae"]
+	path = ae
+	url = https://github.com/CyberShadow/ae
+[submodule "RABCDAsm"]
+	path = RABCDAsm
+	url = https://github.com/CyberShadow/RABCDAsm
