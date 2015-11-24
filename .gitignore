@@ -1,7 +1,10 @@
 /swfmerge.exe
+/main.exe
+*.obj
 
 /SWFMerge.temp/
 
 /Data/
 /Fallout4.exe
 
+/git2.dll
