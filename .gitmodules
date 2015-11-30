@@ -7,3 +7,9 @@
 [submodule "RABCDAsm"]
 	path = RABCDAsm
 	url = https://github.com/CyberShadow/RABCDAsm
+[submodule "libgit2"]
+	path = libgit2
+	url = https://github.com/s-ludwig/libgit2
+[submodule "dlibgit"]
+	path = dlibgit
+	url = https://github.com/s-ludwig/dlibgit
