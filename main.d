@@ -261,7 +261,6 @@ void run(string[] args)
 			}
 		}
 		else
-		if (!gamePath.exists)
 		{
 			stderr.writeln("> Copying ", relPath);
 			copy(outPath, gamePath);
