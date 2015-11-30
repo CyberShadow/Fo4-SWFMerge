@@ -1,3 +1,4 @@
+import std.file;
 import std.path;
 import std.process;
 import std.stdio;
@@ -23,7 +24,9 @@ immutable Resource[] resources =
 
 int main(string[] args)
 {
-    stdout.write("Unpacking...\r"); stdout.flush();
+	chdir(args[0].dirName.absolutePath);
+
+	stdout.write("Unpacking...\r"); stdout.flush();
 
 	tempDir.recreateEmptyDirectory();
 	debug {} else scope(exit) tempDir.forceDelete(Yes.recursive);
