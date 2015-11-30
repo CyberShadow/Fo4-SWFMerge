@@ -1,6 +1,7 @@
 /swfmerge.exe
 /main.exe
 *.obj
+*.zip
 
 /SWFMerge.temp/
 
