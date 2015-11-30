@@ -236,6 +236,14 @@ void run(string[] args)
 		}
 	}
 
+	stderr.writeln("Ready.");
+
+	if (messageBox("This mod is compatible and can be installed.\nProceed with installation?", "SWFMerge", MB_YESNO | MB_ICONQUESTION) != IDYES)
+	{
+		stderr.writeln("User abort.");
+		return;
+	}
+
 	stderr.writeln("=== Installing ===");
 
 	foreach (de; outDir.dirEntries(SpanMode.breadth))
@@ -261,6 +269,7 @@ void run(string[] args)
 	}
 
 	stderr.writeln("All done!");
+	debug {} else messageBox("All done!", "SWFMerge", MB_ICONINFORMATION);
 }
 
 int main(string[] args)
@@ -268,7 +277,6 @@ int main(string[] args)
 	try
 	{
 		run(args);
-		debug {} else messageBox("All done!", "SWFMerge", MB_ICONINFORMATION);
 		return 0;
 	}
 	catch (Throwable e)
