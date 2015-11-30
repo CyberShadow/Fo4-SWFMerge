@@ -166,7 +166,7 @@ void mergeSWF(string base, string a, string b, string result)
 
 void run(string[] args)
 {
-	writeln("SWF Merge for Fallout 4 v0.2 by CyberShadow");
+	writeln("SWF Merge for Fallout 4 v0.4 by CyberShadow");
 	writeln("https://github.com/CyberShadow/Fo4-SWFMerge");
 	writeln();
 
