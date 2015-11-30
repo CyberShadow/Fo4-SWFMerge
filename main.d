@@ -182,7 +182,7 @@ void run(string[] args)
 	if (inputDataDir.baseName().toLower() == "interface")
 	{
 		auto inputDataDir2 = tempDir.buildPath("InputData");
-		mkdir(inputDataDir);
+		mkdirRecurse(inputDataDir2);
 		dirLink(inputDataDir, inputDataDir2.buildPath("Interface"));
 		inputDataDir = inputDataDir2;
 	}
@@ -190,7 +190,7 @@ void run(string[] args)
 	auto archive = BTDX(`Data\Fallout4 - Interface.ba2`);
 
 	auto outDir = tempDir.buildPath("Out");
-	mkdir(outDir);
+	mkdirRecurse(outDir);
 
 	stderr.writeln("=== Preparing ===");
 
@@ -261,7 +261,7 @@ void run(string[] args)
 			}
 		}
 		else
-		if (gamePath.exists)
+		if (!gamePath.exists)
 		{
 			stderr.writeln("> Copying ", relPath);
 			debug{} else copy(outPath, gamePath);
