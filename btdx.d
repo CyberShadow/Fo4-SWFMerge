@@ -25,7 +25,7 @@ struct BTDX
 	void[] extract(string name)
 	{
 		auto index = names.countUntil!(n => !n.icmp(name));
-		enforce(index > 0, "No such file in archive");
+		enforce(index >= 0, "No such file in archive");
 		auto entry = &entries[index];
 		f.seek(entry.offset);
 		return read!void(entry.size);
